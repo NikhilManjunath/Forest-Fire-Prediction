@@ -6,20 +6,7 @@ from sklearn.preprocessing import PolynomialFeatures
 
 app = Flask(__name__)
 
-#Loading our model
-best_model_params = pickle.load(open('./best_model.pkl','rb'))
-best_model = best_model_params['model']
-scaler = best_model_params['scaler']
-orig_columns = ['Date', 'Temperature', 'RH', 'Ws', 'Rain', 'FFMC', 'DMC', 'DC', 'ISI','BUI']
-
-@app.route('/')
-def home():
-    return render_template('home.html')
-
-@app.route('/predict_api', methods = ['POST'])
-def predict_api():
-    data = request.json['data']
-    data_pt = np.array(list(data.values())).reshape(1,-1)
+def prepare_data(data_pt):
     test = pd.DataFrame(data_pt,columns=orig_columns)
 
     test['Avg_Temp'] = 0
@@ -67,11 +54,44 @@ def predict_api():
 
     # #Taking only those columns which were selected using SFS on train dataset
     expanded_test = expanded_test[best_model_params['columns']]
+    return expanded_test
+
+#Loading our model
+best_model_params = pickle.load(open('./best_model.pkl','rb'))
+best_model = best_model_params['model']
+scaler = best_model_params['scaler']
+orig_columns = ['Date', 'Temperature', 'RH', 'Ws', 'Rain', 'FFMC', 'DMC', 'DC', 'ISI','BUI']
+
+@app.route('/')
+def home():
+    return render_template('home.html')
+
+@app.route('/predict_api', methods = ['POST'])
+def predict_api():
+    data = request.json['data']
+    data_pt = np.array(list(data.values())).reshape(1,-1)
+    expanded_test = prepare_data(data_pt)
 
     #Prediction
     output = int(best_model.predict(expanded_test))
     print(output)
     return jsonify(output)
+
+@app.route('/predict',methods = ['POST'])
+def predict():
+    data = [x for x in request.form.values()]
+    for i in range(1,len(data)):
+        data[i] = float(i)
+    data_pt = np.array(data).reshape(1,-1)
+    expanded_test = prepare_data(data_pt)
+
+    output = int(best_model.predict(expanded_test))
+    if output == 0:
+        out_val = "No Fire Predicted"
+    else:
+        out_val = "Forest Fire Predicted"
+    return render_template("home.html",prediction_text='The Prediction is: {}'.format(out_val))
+    
 
 if __name__ == '__main__':
     app.run(debug=True)
